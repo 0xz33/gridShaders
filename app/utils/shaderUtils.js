@@ -10,6 +10,7 @@ const fragmentShaderSource = `
   uniform vec2 u_resolution;
   uniform vec2 u_mouse;
   uniform vec2 u_delayedMouse;
+  uniform vec2 u_gridSize;
   
   float smoothGrid(vec2 st, float width, float feather) {
     vec2 grid = fract(st);
@@ -22,17 +23,17 @@ const fragmentShaderSource = `
     vec2 mouse = u_mouse / u_resolution;
     vec2 delayedMouse = u_delayedMouse / u_resolution;
     
-    // Make grid cells uniform size
-    vec2 scaledSt = st * 20.0;
+    // Use u_gridSize to create uniform grid cells
+    vec2 scaledSt = st * u_gridSize;
     
     float distToMouse = distance(st, delayedMouse);
     
-    // Only show grid lines near the mouse
-    float visibility = smoothstep(0.3, 0.0, distToMouse);
+    // Only show grid lines near the mouse (smaller radius)
+    float visibility = smoothstep(0.15, 0.0, distToMouse);
     
     // Make the effect more pronounced near the mouse
-    float lineWidth = mix(0.02, 0.1, smoothstep(0.2, 0.0, distToMouse));
-    float lineFeather = mix(0.002, 0.05, smoothstep(0.2, 0.0, distToMouse));
+    float lineWidth = mix(0.005, 0.025, smoothstep(0.1, 0.0, distToMouse));
+    float lineFeather = mix(0.0005, 0.0125, smoothstep(0.1, 0.0, distToMouse));
     
     // Smoother grid lines that blur near the mouse
     float gridLine = smoothGrid(scaledSt, lineWidth, lineFeather) * visibility;
@@ -106,15 +107,25 @@ export function initShaders(canvas) {
     program,
     "u_delayedMouse"
   );
+  const gridSizeUniformLocation = gl.getUniformLocation(program, "u_gridSize");
 
   let currentMousePos = { x: 0, y: 0 };
   let delayedMousePos = { x: 0, y: 0 };
+
+  function calculateGridSize() {
+    const aspectRatio = canvas.width / canvas.height;
+    const baseGridSize = 80; // This controls the density of the grid
+    return [baseGridSize * aspectRatio, baseGridSize];
+  }
 
   function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
+
+    const [gridWidth, gridHeight] = calculateGridSize();
+    gl.uniform2f(gridSizeUniformLocation, gridWidth, gridHeight);
   }
 
   window.addEventListener("resize", resizeCanvas);
@@ -127,7 +138,7 @@ export function initShaders(canvas) {
 
   function updateDelayedMouse() {
     const lerp = (start, end, t) => start * (1 - t) + end * t;
-    const lerpFactor = 0.1; // Adjust this value to change the delay (0.1 = 10% movement per frame)
+    const lerpFactor = 0.05;
 
     delayedMousePos.x = lerp(delayedMousePos.x, currentMousePos.x, lerpFactor);
     delayedMousePos.y = lerp(delayedMousePos.y, currentMousePos.y, lerpFactor);
